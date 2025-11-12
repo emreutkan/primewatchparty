@@ -5,7 +5,7 @@ let isConnected = false;
 let videoElement = null;
 let ignoreNextEvent = false; // Prevent feedback loop
 
-const WS_URL = 'ws://localhost:8080';
+const WS_URL = 'wss://primewatchparty.onrender.com';
 
 // Initialize WebSocket connection
 function connect() {
