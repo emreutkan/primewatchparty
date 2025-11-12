@@ -44,8 +44,10 @@ function connect() {
   ws.onclose = () => {
     console.log('[Watch Party] Disconnected from server');
     isConnected = false;
-    // Auto-reconnect after 3 seconds
-    setTimeout(connect, 3000);
+    // Only auto-reconnect if we still have a session and video
+    if (sessionId && username && videoElement) {
+      setTimeout(connect, 3000);
+    }
   };
 
   ws.onerror = (err) => {
@@ -123,23 +125,28 @@ function sendEvent(type, time) {
 function attachVideoListeners(video) {
   videoElement = video;
 
-  video.addEventListener('play', () => {
+  // Store handlers so we can remove them later
+  video._playHandler = () => {
     if (!ignoreNextEvent) {
       sendEvent('play', video.currentTime);
     }
-  });
-
-  video.addEventListener('pause', () => {
+  };
+  
+  video._pauseHandler = () => {
     if (!ignoreNextEvent) {
       sendEvent('pause', video.currentTime);
     }
-  });
-
-  video.addEventListener('seeked', () => {
+  };
+  
+  video._seekHandler = () => {
     if (!ignoreNextEvent) {
       sendEvent('seek', video.currentTime);
     }
-  });
+  };
+
+  video.addEventListener('play', video._playHandler);
+  video.addEventListener('pause', video._pauseHandler);
+  video.addEventListener('seeked', video._seekHandler);
 
   console.log('[Watch Party] Attached to video element');
 }
@@ -152,50 +159,63 @@ function findVideo() {
   }
 }
 
-// Listen for changes from popup
+// Listen for username changes from popup (but don't auto-connect)
 chrome.storage.onChanged.addListener((changes) => {
-  if (changes.sessionId) {
-    sessionId = changes.sessionId.newValue;
-    console.log('[Watch Party] Session ID updated:', sessionId);
-    
-    if (sessionId && username && isConnected) {
-      ws.send(JSON.stringify({ 
-        type: 'join', 
-        sessionId,
-        username,
-        url: window.location.href
-      }));
-    }
-  }
-  
   if (changes.username) {
     username = changes.username.newValue;
     console.log('[Watch Party] Username updated:', username);
   }
 });
 
-// Initialize
+// Listen for manual start/stop from popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'start') {
+    sessionId = request.sessionId;
+    username = request.username;
+    
+    // Find and attach to video
+    findVideo();
+    
+    if (videoElement) {
+      connect();
+      sendResponse({ success: true, message: 'Watch party started!' });
+    } else {
+      sendResponse({ success: false, message: 'No video found on this page' });
+    }
+  } else if (request.action === 'stop') {
+    disconnect();
+    sendResponse({ success: true, message: 'Watch party stopped' });
+  }
+  
+  return true; // Keep channel open for async response
+});
+
+// Disconnect function
+function disconnect() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.close();
+  }
+  
+  // Remove video listeners
+  if (videoElement) {
+    videoElement.removeEventListener('play', videoElement._playHandler);
+    videoElement.removeEventListener('pause', videoElement._pauseHandler);
+    videoElement.removeEventListener('seeked', videoElement._seekHandler);
+    videoElement = null;
+  }
+  
+  isConnected = false;
+  console.log('[Watch Party] Disconnected');
+}
+
+// Clean up on tab close
+window.addEventListener('beforeunload', () => {
+  disconnect();
+});
+
+// Initialize - just load stored data, don't auto-connect
 chrome.storage.local.get(['sessionId', 'username'], (result) => {
   sessionId = result.sessionId;
   username = result.username;
-  
-  if (sessionId && username) {
-    connect();
-  }
-  
-  // Try to find video immediately
-  findVideo();
-  
-  // Keep checking for video element (SPAs might load it later)
-  const observer = new MutationObserver(() => {
-    if (!videoElement) {
-      findVideo();
-    }
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
 });
 

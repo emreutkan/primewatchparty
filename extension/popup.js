@@ -5,7 +5,8 @@ const usernameInput = document.getElementById('username');
 const saveUsernameBtn = document.getElementById('saveUsernameBtn');
 const displayUsername = document.getElementById('displayUsername');
 const sessionInput = document.getElementById('sessionId');
-const joinBtn = document.getElementById('joinBtn');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
 const generateBtn = document.getElementById('generateBtn');
 const status = document.getElementById('status');
 const friendUsernameInput = document.getElementById('friendUsername');
@@ -14,6 +15,7 @@ const friendList = document.getElementById('friendList');
 
 let currentUsername = null;
 let friends = [];
+let isActive = false;
 
 // Initialize - check if user has username
 chrome.storage.local.get(['username', 'sessionId', 'friends'], (result) => {
@@ -26,7 +28,6 @@ chrome.storage.local.get(['username', 'sessionId', 'friends'], (result) => {
   
   if (result.sessionId) {
     sessionInput.value = result.sessionId;
-    updateStatus(result.sessionId);
   }
   
   if (result.friends) {
@@ -81,8 +82,8 @@ generateBtn.addEventListener('click', () => {
   sessionInput.value = randomId;
 });
 
-// Join session
-joinBtn.addEventListener('click', () => {
+// Start watch party
+startBtn.addEventListener('click', () => {
   const sessionId = sessionInput.value.trim();
   
   if (!sessionId) {
@@ -90,25 +91,61 @@ joinBtn.addEventListener('click', () => {
     return;
   }
   
-  chrome.storage.local.set({ sessionId }, () => {
-    updateStatus(sessionId);
+  // Save session ID
+  chrome.storage.local.set({ sessionId });
+  
+  // Send message to content script to start
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.sendMessage(tabs[0].id, {
+      action: 'start',
+      sessionId,
+      username: currentUsername
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        alert('Error: Reload the page and try again');
+        return;
+      }
+      
+      if (response.success) {
+        isActive = true;
+        updateStatus(sessionId, true);
+        startBtn.style.display = 'none';
+        stopBtn.style.display = 'block';
+      } else {
+        alert(response.message);
+      }
+    });
+  });
+});
+
+// Stop watch party
+stopBtn.addEventListener('click', () => {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    chrome.tabs.sendMessage(tabs[0].id, {
+      action: 'stop'
+    }, (response) => {
+      isActive = false;
+      updateStatus(null, false);
+      startBtn.style.display = 'block';
+      stopBtn.style.display = 'none';
+    });
   });
 });
 
 // Allow enter key for session
 sessionInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
-    joinBtn.click();
+    startBtn.click();
   }
 });
 
 // Update status display
-function updateStatus(sessionId) {
-  if (sessionId) {
-    status.textContent = `Active: ${sessionId}`;
+function updateStatus(sessionId, active) {
+  if (active && sessionId) {
+    status.textContent = `🟢 Active: ${sessionId}`;
     status.className = 'status active';
   } else {
-    status.textContent = 'Not in a session';
+    status.textContent = 'Not active';
     status.className = 'status inactive';
   }
 }
