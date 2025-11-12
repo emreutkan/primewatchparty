@@ -211,6 +211,7 @@ function disconnect() {
 // Clean up on tab close
 window.addEventListener('beforeunload', () => {
   disconnect();
+  chrome.storage.local.set({ isActive: false });
 });
 
 // Initialize - just load stored data, don't auto-connect

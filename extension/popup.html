@@ -3,27 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <style>
-    body {
-      width: 350px;
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    * {
+      box-sizing: border-box;
       margin: 0;
-      max-height: 600px;
-      overflow-y: auto;
+      padding: 0;
+    }
+    
+    body {
+      width: 360px;
+      min-height: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      overflow-x: hidden;
+    }
+    
+    .container {
+      padding: 20px;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
     }
     
     h1 {
-      font-size: 18px;
-      margin: 0 0 16px 0;
-      color: #1a1a1a;
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #1d1d1f;
+    }
+    
+    .subtitle {
+      font-size: 13px;
+      color: #86868b;
+      font-weight: 400;
+    }
+    
+    .section {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+      border: 1px solid #d2d2d7;
     }
     
     h2 {
-      font-size: 14px;
-      margin: 20px 0 8px 0;
-      color: #333;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 4px;
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #1d1d1f;
     }
     
     .input-group {
@@ -33,170 +62,214 @@
     label {
       display: block;
       font-size: 13px;
-      color: #666;
-      margin-bottom: 4px;
+      color: #86868b;
+      margin-bottom: 8px;
+      font-weight: 400;
     }
     
     input {
       width: 100%;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
-      box-sizing: border-box;
+      padding: 11px 12px;
+      border: 1px solid #d2d2d7;
+      border-radius: 10px;
+      font-size: 15px;
+      background: #ffffff;
+      color: #1d1d1f;
+      transition: border-color 0.2s ease;
     }
     
     input:focus {
       outline: none;
-      border-color: #0066ff;
+      border-color: #007aff;
     }
     
     button {
       width: 100%;
-      padding: 10px;
-      background: #0066ff;
+      padding: 12px;
+      background: #007aff;
       color: white;
       border: none;
-      border-radius: 4px;
-      font-size: 14px;
-      font-weight: 600;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
       cursor: pointer;
+      transition: opacity 0.2s ease;
     }
     
     button:hover {
-      background: #0052cc;
+      opacity: 0.8;
     }
     
     button:active {
-      background: #003d99;
+      opacity: 0.6;
     }
     
     .status {
-      margin-top: 12px;
-      padding: 8px;
-      border-radius: 4px;
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
       font-size: 13px;
       text-align: center;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
     
     .status.active {
-      background: #e6f7e6;
-      color: #006600;
+      background: #34c759;
+      color: white;
     }
     
     .status.inactive {
-      background: #f5f5f5;
-      color: #666;
+      background: #f5f5f7;
+      color: #86868b;
+      border: 1px solid #d2d2d7;
     }
     
     .generate-btn {
-      background: transparent;
-      color: #0066ff;
-      border: 1px solid #0066ff;
+      background: #f5f5f7;
+      color: #007aff;
+      border: 1px solid #d2d2d7;
       margin-bottom: 8px;
     }
     
     .generate-btn:hover {
-      background: #f0f7ff;
+      background: #e8e8ed;
+    }
+    
+    .stop-btn {
+      background: #ff3b30;
     }
     
     .secondary-btn {
-      background: #28a745;
+      background: #34c759;
       margin-top: 8px;
     }
     
-    .secondary-btn:hover {
-      background: #218838;
+    .friend-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 12px;
     }
     
-    .friend-list {
-      max-height: 150px;
-      overflow-y: auto;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      padding: 8px;
-      margin-bottom: 8px;
+    .friend-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    
+    .friend-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    .friend-list::-webkit-scrollbar-thumb {
+      background: #d2d2d7;
+      border-radius: 10px;
     }
     
     .friend-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px;
-      border-bottom: 1px solid #f0f0f0;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: #f5f5f7;
     }
     
     .friend-item:last-child {
-      border-bottom: none;
+      margin-bottom: 0;
     }
     
     .friend-name {
-      font-size: 13px;
-      color: #333;
+      font-size: 15px;
+      color: #1d1d1f;
+      font-weight: 400;
     }
     
     .invite-btn {
-      padding: 4px 12px;
-      font-size: 12px;
+      padding: 6px 14px;
+      font-size: 13px;
       width: auto;
-      background: #0066ff;
+      background: #007aff;
     }
     
     .empty-state {
       text-align: center;
-      color: #999;
+      color: #86868b;
       font-size: 13px;
-      padding: 20px;
+      padding: 40px 20px;
     }
     
     .username-display {
-      background: #f0f7ff;
-      padding: 8px;
-      border-radius: 4px;
+      background: #007aff;
+      padding: 14px;
+      border-radius: 10px;
       margin-bottom: 12px;
       text-align: center;
-      font-size: 13px;
-      color: #0066ff;
+      font-size: 15px;
+      color: white;
+      font-weight: 500;
+    }
+    
+    .username-display strong {
+      font-weight: 600;
+      font-size: 17px;
     }
   </style>
 </head>
 <body>
-  <h1>🎬 Watch Party</h1>
-  
-  <div id="setupSection">
-    <div class="input-group">
-      <label for="username">Your Username</label>
-      <input type="text" id="username" placeholder="Enter your username">
-    </div>
-    <button id="saveUsernameBtn">Save Username</button>
-  </div>
-  
-  <div id="mainSection" style="display: none;">
-    <div class="username-display">
-      Signed in as: <strong id="displayUsername"></strong>
+  <div class="container">
+    <div class="header">
+      <h1>🎬 Watch Party</h1>
+      <div class="subtitle">Watch together, perfectly in sync</div>
     </div>
     
-    <h2>Session</h2>
-    <div class="input-group">
-      <label for="sessionId">Session ID</label>
-      <input type="text" id="sessionId" placeholder="Enter or generate session ID">
+    <div id="setupSection">
+      <div class="section">
+        <h2>Welcome</h2>
+        <div class="input-group">
+          <label for="username">Your Username</label>
+          <input type="text" id="username" placeholder="Enter your username">
+        </div>
+        <button id="saveUsernameBtn">Get Started</button>
+      </div>
     </div>
     
-    <button class="generate-btn" id="generateBtn">Generate Random ID</button>
-    <button id="startBtn">▶ Start Watch Party</button>
-    <button id="stopBtn" style="display: none; background: #dc3545;">⏸ Stop Watch Party</button>
-    
-    <div class="status inactive" id="status">Not active</div>
-    
-    <h2>Friends</h2>
-    <div class="input-group">
-      <label for="friendUsername">Add Friend</label>
-      <input type="text" id="friendUsername" placeholder="Friend's username">
-    </div>
-    <button class="secondary-btn" id="addFriendBtn">Add Friend</button>
-    
-    <div class="friend-list" id="friendList">
-      <div class="empty-state">No friends yet. Add some!</div>
+    <div id="mainSection" style="display: none;">
+      <div class="username-display">
+        👤 <strong id="displayUsername"></strong>
+      </div>
+      
+      <div class="section">
+        <h2>Watch Party</h2>
+        <div class="input-group">
+          <label for="sessionId">Session ID</label>
+          <input type="text" id="sessionId" placeholder="Enter or generate session ID">
+        </div>
+        
+        <button class="generate-btn" id="generateBtn">🎲 Generate ID</button>
+        <button id="startBtn">▶ Start Watch Party</button>
+        <button id="stopBtn" class="stop-btn" style="display: none;">⏹ Stop Watch Party</button>
+        
+        <div class="status inactive" id="status">
+          <span>⚪</span>
+          <span>Not active</span>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>Friends</h2>
+        <div class="input-group">
+          <label for="friendUsername">Add Friend</label>
+          <input type="text" id="friendUsername" placeholder="Friend's username">
+        </div>
+        <button class="secondary-btn" id="addFriendBtn">➕ Add Friend</button>
+        
+        <div class="friend-list" id="friendList">
+          <div class="empty-state">No friends yet. Add some!</div>
+        </div>
+      </div>
     </div>
   </div>
   

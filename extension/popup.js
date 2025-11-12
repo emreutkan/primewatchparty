@@ -18,7 +18,7 @@ let friends = [];
 let isActive = false;
 
 // Initialize - check if user has username
-chrome.storage.local.get(['username', 'sessionId', 'friends'], (result) => {
+chrome.storage.local.get(['username', 'sessionId', 'friends', 'isActive'], (result) => {
   if (result.username) {
     currentUsername = result.username;
     showMainSection();
@@ -33,6 +33,14 @@ chrome.storage.local.get(['username', 'sessionId', 'friends'], (result) => {
   if (result.friends) {
     friends = result.friends;
     renderFriendList();
+  }
+  
+  // Restore active state
+  if (result.isActive && result.sessionId) {
+    isActive = true;
+    updateStatus(result.sessionId, true);
+    startBtn.style.display = 'none';
+    stopBtn.style.display = 'block';
   }
 });
 
@@ -96,22 +104,28 @@ startBtn.addEventListener('click', () => {
   
   // Send message to content script to start
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (!tabs[0]) {
+      alert('No active tab found');
+      return;
+    }
+    
     chrome.tabs.sendMessage(tabs[0].id, {
       action: 'start',
       sessionId,
       username: currentUsername
     }, (response) => {
       if (chrome.runtime.lastError) {
-        alert('Error: Reload the page and try again');
+        alert('Please refresh the page first!\n\nThe extension needs to load on this page.\n\n1. Refresh the page (F5)\n2. Click Start again');
         return;
       }
       
-      if (response.success) {
+      if (response && response.success) {
         isActive = true;
+        chrome.storage.local.set({ isActive: true });
         updateStatus(sessionId, true);
         startBtn.style.display = 'none';
         stopBtn.style.display = 'block';
-      } else {
+      } else if (response) {
         alert(response.message);
       }
     });
@@ -125,6 +139,7 @@ stopBtn.addEventListener('click', () => {
       action: 'stop'
     }, (response) => {
       isActive = false;
+      chrome.storage.local.set({ isActive: false });
       updateStatus(null, false);
       startBtn.style.display = 'block';
       stopBtn.style.display = 'none';
@@ -142,10 +157,10 @@ sessionInput.addEventListener('keypress', (e) => {
 // Update status display
 function updateStatus(sessionId, active) {
   if (active && sessionId) {
-    status.textContent = `🟢 Active: ${sessionId}`;
+    status.innerHTML = `<span>🟢</span><span>Active: ${sessionId}</span>`;
     status.className = 'status active';
   } else {
-    status.textContent = 'Not active';
+    status.innerHTML = '<span>⚪</span><span>Not active</span>';
     status.className = 'status inactive';
   }
 }
