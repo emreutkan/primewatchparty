@@ -4,16 +4,26 @@
   <meta charset="UTF-8">
   <style>
     body {
-      width: 300px;
+      width: 350px;
       padding: 16px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       margin: 0;
+      max-height: 600px;
+      overflow-y: auto;
     }
     
     h1 {
       font-size: 18px;
       margin: 0 0 16px 0;
       color: #1a1a1a;
+    }
+    
+    h2 {
+      font-size: 14px;
+      margin: 20px 0 8px 0;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 4px;
     }
     
     .input-group {
@@ -89,20 +99,105 @@
     .generate-btn:hover {
       background: #f0f7ff;
     }
+    
+    .secondary-btn {
+      background: #28a745;
+      margin-top: 8px;
+    }
+    
+    .secondary-btn:hover {
+      background: #218838;
+    }
+    
+    .friend-list {
+      max-height: 150px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+    
+    .friend-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .friend-item:last-child {
+      border-bottom: none;
+    }
+    
+    .friend-name {
+      font-size: 13px;
+      color: #333;
+    }
+    
+    .invite-btn {
+      padding: 4px 12px;
+      font-size: 12px;
+      width: auto;
+      background: #0066ff;
+    }
+    
+    .empty-state {
+      text-align: center;
+      color: #999;
+      font-size: 13px;
+      padding: 20px;
+    }
+    
+    .username-display {
+      background: #f0f7ff;
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 12px;
+      text-align: center;
+      font-size: 13px;
+      color: #0066ff;
+    }
   </style>
 </head>
 <body>
   <h1>🎬 Watch Party</h1>
   
-  <div class="input-group">
-    <label for="sessionId">Session ID</label>
-    <input type="text" id="sessionId" placeholder="Enter or generate session ID">
+  <div id="setupSection">
+    <div class="input-group">
+      <label for="username">Your Username</label>
+      <input type="text" id="username" placeholder="Enter your username">
+    </div>
+    <button id="saveUsernameBtn">Save Username</button>
   </div>
   
-  <button class="generate-btn" id="generateBtn">Generate Random ID</button>
-  <button id="joinBtn">Join Session</button>
-  
-  <div class="status inactive" id="status">Not in a session</div>
+  <div id="mainSection" style="display: none;">
+    <div class="username-display">
+      Signed in as: <strong id="displayUsername"></strong>
+    </div>
+    
+    <h2>Session</h2>
+    <div class="input-group">
+      <label for="sessionId">Session ID</label>
+      <input type="text" id="sessionId" placeholder="Enter or generate session ID">
+    </div>
+    
+    <button class="generate-btn" id="generateBtn">Generate Random ID</button>
+    <button id="joinBtn">Join Session</button>
+    
+    <div class="status inactive" id="status">Not in a session</div>
+    
+    <h2>Friends</h2>
+    <div class="input-group">
+      <label for="friendUsername">Add Friend</label>
+      <input type="text" id="friendUsername" placeholder="Friend's username">
+    </div>
+    <button class="secondary-btn" id="addFriendBtn">Add Friend</button>
+    
+    <div class="friend-list" id="friendList">
+      <div class="empty-state">No friends yet. Add some!</div>
+    </div>
+  </div>
   
   <script src="popup.js"></script>
 </body>

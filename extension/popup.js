@@ -1,13 +1,77 @@
+// DOM elements
+const setupSection = document.getElementById('setupSection');
+const mainSection = document.getElementById('mainSection');
+const usernameInput = document.getElementById('username');
+const saveUsernameBtn = document.getElementById('saveUsernameBtn');
+const displayUsername = document.getElementById('displayUsername');
 const sessionInput = document.getElementById('sessionId');
 const joinBtn = document.getElementById('joinBtn');
 const generateBtn = document.getElementById('generateBtn');
 const status = document.getElementById('status');
+const friendUsernameInput = document.getElementById('friendUsername');
+const addFriendBtn = document.getElementById('addFriendBtn');
+const friendList = document.getElementById('friendList');
 
-// Load current session
-chrome.storage.local.get(['sessionId'], (result) => {
+let currentUsername = null;
+let friends = [];
+
+// Initialize - check if user has username
+chrome.storage.local.get(['username', 'sessionId', 'friends'], (result) => {
+  if (result.username) {
+    currentUsername = result.username;
+    showMainSection();
+  } else {
+    showSetupSection();
+  }
+  
   if (result.sessionId) {
     sessionInput.value = result.sessionId;
     updateStatus(result.sessionId);
+  }
+  
+  if (result.friends) {
+    friends = result.friends;
+    renderFriendList();
+  }
+});
+
+// Show setup section
+function showSetupSection() {
+  setupSection.style.display = 'block';
+  mainSection.style.display = 'none';
+}
+
+// Show main section
+function showMainSection() {
+  setupSection.style.display = 'none';
+  mainSection.style.display = 'block';
+  displayUsername.textContent = currentUsername;
+}
+
+// Save username
+saveUsernameBtn.addEventListener('click', () => {
+  const username = usernameInput.value.trim();
+  
+  if (!username) {
+    alert('Please enter a username');
+    return;
+  }
+  
+  if (username.length < 3) {
+    alert('Username must be at least 3 characters');
+    return;
+  }
+  
+  currentUsername = username;
+  chrome.storage.local.set({ username }, () => {
+    showMainSection();
+  });
+});
+
+// Allow enter key for username
+usernameInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    saveUsernameBtn.click();
   }
 });
 
@@ -31,6 +95,13 @@ joinBtn.addEventListener('click', () => {
   });
 });
 
+// Allow enter key for session
+sessionInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    joinBtn.click();
+  }
+});
+
 // Update status display
 function updateStatus(sessionId) {
   if (sessionId) {
@@ -42,10 +113,76 @@ function updateStatus(sessionId) {
   }
 }
 
-// Allow enter key to join
-sessionInput.addEventListener('keypress', (e) => {
+// Add friend
+addFriendBtn.addEventListener('click', () => {
+  const friendUsername = friendUsernameInput.value.trim();
+  
+  if (!friendUsername) {
+    alert('Please enter a username');
+    return;
+  }
+  
+  if (friendUsername === currentUsername) {
+    alert("You can't add yourself as a friend!");
+    return;
+  }
+  
+  if (friends.includes(friendUsername)) {
+    alert('Already friends!');
+    return;
+  }
+  
+  friends.push(friendUsername);
+  chrome.storage.local.set({ friends }, () => {
+    friendUsernameInput.value = '';
+    renderFriendList();
+  });
+});
+
+// Allow enter key for adding friends
+friendUsernameInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
-    joinBtn.click();
+    addFriendBtn.click();
   }
 });
 
+// Render friend list
+function renderFriendList() {
+  if (friends.length === 0) {
+    friendList.innerHTML = '<div class="empty-state">No friends yet. Add some!</div>';
+    return;
+  }
+  
+  friendList.innerHTML = friends.map(friend => `
+    <div class="friend-item">
+      <span class="friend-name">${friend}</span>
+      <button class="invite-btn" data-friend="${friend}">Invite</button>
+    </div>
+  `).join('');
+  
+  // Add click listeners to invite buttons
+  document.querySelectorAll('.invite-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const friend = e.target.getAttribute('data-friend');
+      inviteFriend(friend);
+    });
+  });
+}
+
+// Invite friend to session
+function inviteFriend(friendUsername) {
+  chrome.storage.local.get(['sessionId'], (result) => {
+    if (!result.sessionId) {
+      alert('Please join a session first!');
+      return;
+    }
+    
+    // Copy session ID to clipboard
+    const inviteText = `Join my watch party! Session ID: ${result.sessionId}`;
+    navigator.clipboard.writeText(inviteText).then(() => {
+      alert(`Invite copied to clipboard!\nShare with ${friendUsername}`);
+    }).catch(() => {
+      alert(`Session ID: ${result.sessionId}\n(Copy this manually)`);
+    });
+  });
+}

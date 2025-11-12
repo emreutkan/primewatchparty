@@ -1,9 +1,13 @@
 // WebSocket connection
 let ws = null;
 let sessionId = null;
+let username = null;
 let isConnected = false;
 let videoElement = null;
 let ignoreNextEvent = false; // Prevent feedback loop
+let seekDebounceTimer = null;
+let lastEventTime = 0;
+const EVENT_THROTTLE_MS = 200; // Minimum time between events
 
 const WS_URL = 'wss://primewatchparty.onrender.com';
 
@@ -18,8 +22,13 @@ function connect() {
     isConnected = true;
     
     // Join session if we have one
-    if (sessionId) {
-      ws.send(JSON.stringify({ type: 'join', sessionId }));
+    if (sessionId && username) {
+      ws.send(JSON.stringify({ 
+        type: 'join', 
+        sessionId,
+        username,
+        url: window.location.href
+      }));
     }
   };
 
@@ -48,20 +57,33 @@ function connect() {
 function handleRemoteEvent(message) {
   if (!videoElement) return;
 
-  const { type, time } = message;
+  const { type, time, url, username: senderUsername } = message;
   
-  console.log(`[Watch Party] Received ${type} event at ${time}s`);
+  // Only sync if we're on the same URL
+  if (url && url !== window.location.href) {
+    console.log(`[Watch Party] Ignoring event - different URL`);
+    return;
+  }
+  
+  console.log(`[Watch Party] ${senderUsername || 'User'} ${type} at ${time}s`);
   
   // Set flag to ignore our own event handlers
   ignoreNextEvent = true;
 
+  // Calculate time difference to sync precisely
+  const timeDiff = Math.abs(videoElement.currentTime - time);
+  
   switch (type) {
     case 'play':
-      videoElement.currentTime = time;
-      videoElement.play();
+      if (timeDiff > 0.5) {
+        videoElement.currentTime = time;
+      }
+      videoElement.play().catch(err => console.log('[Watch Party] Play error:', err));
       break;
     case 'pause':
-      videoElement.currentTime = time;
+      if (timeDiff > 0.5) {
+        videoElement.currentTime = time;
+      }
       videoElement.pause();
       break;
     case 'seek':
@@ -72,17 +94,25 @@ function handleRemoteEvent(message) {
   // Reset flag after a short delay
   setTimeout(() => {
     ignoreNextEvent = false;
-  }, 100);
+  }, 300);
 }
 
-// Send event to server
+// Send event to server with throttling
 function sendEvent(type, time) {
-  if (!isConnected || !sessionId || ignoreNextEvent) return;
+  if (!isConnected || !sessionId || ignoreNextEvent || !username) return;
+
+  const now = Date.now();
+  if (now - lastEventTime < EVENT_THROTTLE_MS && type !== 'pause' && type !== 'play') {
+    return; // Throttle rapid events except play/pause
+  }
+  lastEventTime = now;
 
   const payload = {
     type,
     time,
-    sessionId
+    sessionId,
+    username,
+    url: window.location.href
   };
 
   ws.send(JSON.stringify(payload));
@@ -122,23 +152,34 @@ function findVideo() {
   }
 }
 
-// Listen for session changes from popup
+// Listen for changes from popup
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.sessionId) {
     sessionId = changes.sessionId.newValue;
     console.log('[Watch Party] Session ID updated:', sessionId);
     
-    if (sessionId && isConnected) {
-      ws.send(JSON.stringify({ type: 'join', sessionId }));
+    if (sessionId && username && isConnected) {
+      ws.send(JSON.stringify({ 
+        type: 'join', 
+        sessionId,
+        username,
+        url: window.location.href
+      }));
     }
+  }
+  
+  if (changes.username) {
+    username = changes.username.newValue;
+    console.log('[Watch Party] Username updated:', username);
   }
 });
 
 // Initialize
-chrome.storage.local.get(['sessionId'], (result) => {
+chrome.storage.local.get(['sessionId', 'username'], (result) => {
   sessionId = result.sessionId;
+  username = result.username;
   
-  if (sessionId) {
+  if (sessionId && username) {
     connect();
   }
   
