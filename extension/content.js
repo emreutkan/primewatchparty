@@ -19,23 +19,28 @@ function connect() {
   ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
-    console.log('[Watch Party] Connected to server');
+    console.log('[Watch Party] ✅ Connected to server');
     isConnected = true;
     
     // Join session if we have one
     if (sessionId && username) {
-      ws.send(JSON.stringify({ 
+      const joinMsg = { 
         type: 'join', 
         sessionId,
         username,
         url: window.location.href
-      }));
+      };
+      console.log('[Watch Party] 📤 Joining session:', joinMsg);
+      ws.send(JSON.stringify(joinMsg));
+    } else {
+      console.log('[Watch Party] ⚠️ No session/username to join with');
     }
   };
 
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
+      console.log('[Watch Party] 📥 Received:', message);
       handleRemoteEvent(message);
     } catch (err) {
       console.error('[Watch Party] Invalid message:', err);
@@ -70,16 +75,25 @@ function normalizeURL(urlString) {
 
 // Handle events from remote peers
 function handleRemoteEvent(message) {
-  if (!videoElement) return;
+  if (!videoElement) {
+    console.log('[Watch Party] ❌ No video element, ignoring remote event');
+    return;
+  }
 
   const { type, time, url, username: senderUsername } = message;
+  
+  // Ignore non-video events
+  if (type === 'user_joined' || type === 'user_left') {
+    console.log(`[Watch Party] 👥 ${senderUsername} ${type === 'user_joined' ? 'joined' : 'left'}`);
+    return;
+  }
   
   // Only sync if we're on the same URL (normalized comparison)
   if (url) {
     const theirURL = normalizeURL(url);
     const myURL = normalizeURL(window.location.href);
     
-    console.log(`[Watch Party] URL check: ${myURL} vs ${theirURL}`);
+    console.log(`[Watch Party] 🔗 URL check: MY[${myURL}] vs THEIR[${theirURL}]`);
     
     if (theirURL !== myURL) {
       console.log(`[Watch Party] ❌ Ignoring event - different URL`);
@@ -124,11 +138,24 @@ function handleRemoteEvent(message) {
 
 // Send event to server with throttling
 function sendEvent(type, time) {
-  if (!isConnected || !sessionId || !username) return;
+  console.log(`[Watch Party] 🎬 Video ${type} event detected at ${time.toFixed(2)}s`);
+  
+  if (!isConnected) {
+    console.log(`[Watch Party] ❌ Not connected, can't send ${type}`);
+    return;
+  }
+  if (!sessionId) {
+    console.log(`[Watch Party] ❌ No sessionId, can't send ${type}`);
+    return;
+  }
+  if (!username) {
+    console.log(`[Watch Party] ❌ No username, can't send ${type}`);
+    return;
+  }
 
   // Don't send if we're still processing a remote event
   if (ignoringEvents) {
-    console.log(`[Watch Party] Ignoring own ${type} event (processing remote)`);
+    console.log(`[Watch Party] 🚫 Ignoring own ${type} event (processing remote)`);
     return;
   }
 
@@ -137,14 +164,15 @@ function sendEvent(type, time) {
   if (timeSinceRemote < IGNORE_DURATION) {
     const timeDiff = Math.abs(time - lastRemoteAction.time);
     if (timeDiff < 1.0) {
-      console.log(`[Watch Party] Ignoring own ${type} event (matches remote)`);
+      console.log(`[Watch Party] 🚫 Ignoring own ${type} event (matches remote action ${lastRemoteAction.type})`);
       return;
     }
   }
 
   const now = Date.now();
   if (now - lastEventTime < EVENT_THROTTLE_MS && type !== 'pause' && type !== 'play') {
-    return; // Throttle rapid events except play/pause
+    console.log(`[Watch Party] ⏱️ Throttled ${type} event`);
+    return;
   }
   lastEventTime = now;
 
@@ -157,7 +185,7 @@ function sendEvent(type, time) {
   };
 
   ws.send(JSON.stringify(payload));
-  console.log(`[Watch Party] Sent ${type} event at ${time.toFixed(2)}s`);
+  console.log(`[Watch Party] 📤 SENT ${type} event at ${time.toFixed(2)}s`);
 }
 
 // Hook into video element
@@ -181,15 +209,23 @@ function attachVideoListeners(video) {
   video.addEventListener('pause', video._pauseHandler);
   video.addEventListener('seeked', video._seekHandler);
 
-  console.log('[Watch Party] Attached to video element');
+  console.log('[Watch Party] ✅ Attached to video element:', video);
+  console.log('[Watch Party] 📊 Video state: paused=' + video.paused + ', currentTime=' + video.currentTime.toFixed(2));
 }
 
 // Find and attach to video element
 function findVideo() {
   const video = document.querySelector('video');
-  if (video && video !== videoElement) {
-    attachVideoListeners(video);
+  if (!video) {
+    console.log('[Watch Party] ❌ No video element found on page');
+    return;
   }
+  if (video === videoElement) {
+    console.log('[Watch Party] ✅ Already attached to video');
+    return;
+  }
+  console.log('[Watch Party] 🔍 Found video element, attaching...');
+  attachVideoListeners(video);
 }
 
 // Listen for username changes from popup (but don't auto-connect)
@@ -202,9 +238,13 @@ chrome.storage.onChanged.addListener((changes) => {
 
 // Listen for manual start/stop from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('[Watch Party] 📨 Message from popup:', request);
+  
   if (request.action === 'start') {
     sessionId = request.sessionId;
     username = request.username;
+    
+    console.log(`[Watch Party] 🚀 Starting with session=${sessionId}, username=${username}`);
     
     // Find and attach to video
     findVideo();
@@ -216,6 +256,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: false, message: 'No video found on this page' });
     }
   } else if (request.action === 'stop') {
+    console.log('[Watch Party] 🛑 Stopping watch party');
     disconnect();
     sendResponse({ success: true, message: 'Watch party stopped' });
   }
@@ -252,4 +293,5 @@ chrome.storage.local.get(['sessionId', 'username'], (result) => {
   sessionId = result.sessionId;
   username = result.username;
 });
+
 
