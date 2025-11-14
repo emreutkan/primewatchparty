@@ -4,10 +4,11 @@ let sessionId = null;
 let username = null;
 let isConnected = false;
 let videoElement = null;
-let ignoreNextEvent = false; // Prevent feedback loop
-let seekDebounceTimer = null;
+let ignoringEvents = false; // Prevent feedback loop
+let lastRemoteAction = { type: null, time: null, timestamp: 0 };
 let lastEventTime = 0;
 const EVENT_THROTTLE_MS = 200; // Minimum time between events
+const IGNORE_DURATION = 500; // How long to ignore events after remote action
 
 const WS_URL = 'wss://primewatchparty.onrender.com';
 
@@ -55,35 +56,57 @@ function connect() {
   };
 }
 
+// Normalize URL for comparison (ignore trailing slash, hash, query params order)
+function normalizeURL(urlString) {
+  try {
+    const url = new URL(urlString);
+    // Use pathname without trailing slash + sorted query params
+    const path = url.pathname.replace(/\/$/, '');
+    return url.origin + path;
+  } catch {
+    return urlString;
+  }
+}
+
 // Handle events from remote peers
 function handleRemoteEvent(message) {
   if (!videoElement) return;
 
   const { type, time, url, username: senderUsername } = message;
   
-  // Only sync if we're on the same URL
-  if (url && url !== window.location.href) {
-    console.log(`[Watch Party] Ignoring event - different URL`);
-    return;
+  // Only sync if we're on the same URL (normalized comparison)
+  if (url) {
+    const theirURL = normalizeURL(url);
+    const myURL = normalizeURL(window.location.href);
+    
+    console.log(`[Watch Party] URL check: ${myURL} vs ${theirURL}`);
+    
+    if (theirURL !== myURL) {
+      console.log(`[Watch Party] ❌ Ignoring event - different URL`);
+      return;
+    }
   }
   
-  console.log(`[Watch Party] ${senderUsername || 'User'} ${type} at ${time}s`);
+  console.log(`[Watch Party] ✅ ${senderUsername || 'User'} ${type} at ${time.toFixed(2)}s`);
   
-  // Set flag to ignore our own event handlers
-  ignoreNextEvent = true;
+  // Track this remote action
+  lastRemoteAction = { type, time, timestamp: Date.now() };
+  ignoringEvents = true;
 
   // Calculate time difference to sync precisely
   const timeDiff = Math.abs(videoElement.currentTime - time);
   
   switch (type) {
     case 'play':
-      if (timeDiff > 0.5) {
+      // Always sync time for play
+      if (timeDiff > 0.3) {
         videoElement.currentTime = time;
       }
       videoElement.play().catch(err => console.log('[Watch Party] Play error:', err));
       break;
     case 'pause':
-      if (timeDiff > 0.5) {
+      // Always sync time for pause
+      if (timeDiff > 0.3) {
         videoElement.currentTime = time;
       }
       videoElement.pause();
@@ -93,15 +116,31 @@ function handleRemoteEvent(message) {
       break;
   }
 
-  // Reset flag after a short delay
+  // Reset flag after video has time to process
   setTimeout(() => {
-    ignoreNextEvent = false;
-  }, 300);
+    ignoringEvents = false;
+  }, IGNORE_DURATION);
 }
 
 // Send event to server with throttling
 function sendEvent(type, time) {
-  if (!isConnected || !sessionId || ignoreNextEvent || !username) return;
+  if (!isConnected || !sessionId || !username) return;
+
+  // Don't send if we're still processing a remote event
+  if (ignoringEvents) {
+    console.log(`[Watch Party] Ignoring own ${type} event (processing remote)`);
+    return;
+  }
+
+  // Don't send if this looks like an event we just caused from remote action
+  const timeSinceRemote = Date.now() - lastRemoteAction.timestamp;
+  if (timeSinceRemote < IGNORE_DURATION) {
+    const timeDiff = Math.abs(time - lastRemoteAction.time);
+    if (timeDiff < 1.0) {
+      console.log(`[Watch Party] Ignoring own ${type} event (matches remote)`);
+      return;
+    }
+  }
 
   const now = Date.now();
   if (now - lastEventTime < EVENT_THROTTLE_MS && type !== 'pause' && type !== 'play') {
@@ -118,7 +157,7 @@ function sendEvent(type, time) {
   };
 
   ws.send(JSON.stringify(payload));
-  console.log(`[Watch Party] Sent ${type} event at ${time}s`);
+  console.log(`[Watch Party] Sent ${type} event at ${time.toFixed(2)}s`);
 }
 
 // Hook into video element
@@ -127,21 +166,15 @@ function attachVideoListeners(video) {
 
   // Store handlers so we can remove them later
   video._playHandler = () => {
-    if (!ignoreNextEvent) {
-      sendEvent('play', video.currentTime);
-    }
+    sendEvent('play', video.currentTime);
   };
   
   video._pauseHandler = () => {
-    if (!ignoreNextEvent) {
-      sendEvent('pause', video.currentTime);
-    }
+    sendEvent('pause', video.currentTime);
   };
   
   video._seekHandler = () => {
-    if (!ignoreNextEvent) {
-      sendEvent('seek', video.currentTime);
-    }
+    sendEvent('seek', video.currentTime);
   };
 
   video.addEventListener('play', video._playHandler);
