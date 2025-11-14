@@ -4,11 +4,7 @@ let sessionId = null;
 let username = null;
 let isConnected = false;
 let videoElement = null;
-let ignoringEvents = false; // Prevent feedback loop
-let lastRemoteAction = { type: null, time: null, timestamp: 0 };
-let lastEventTime = 0;
-const EVENT_THROTTLE_MS = 200; // Minimum time between events
-const IGNORE_DURATION = 500; // How long to ignore events after remote action
+let processingRemoteEvent = false; // Simple flag to prevent immediate echo
 
 const WS_URL = 'wss://primewatchparty.onrender.com';
 
@@ -61,26 +57,11 @@ function connect() {
   };
 }
 
-// Normalize URL for comparison (ignore trailing slash, hash, query params order)
-function normalizeURL(urlString) {
-  try {
-    const url = new URL(urlString);
-    // Use pathname without trailing slash + sorted query params
-    const path = url.pathname.replace(/\/$/, '');
-    return url.origin + path;
-  } catch {
-    return urlString;
-  }
-}
-
 // Handle events from remote peers
 function handleRemoteEvent(message) {
-  if (!videoElement) {
-    console.log('[Watch Party] ❌ No video element, ignoring remote event');
-    return;
-  }
+  if (!videoElement) return;
 
-  const { type, time, url, username: senderUsername } = message;
+  const { type, time, username: senderUsername } = message;
   
   // Ignore non-video events
   if (type === 'user_joined' || type === 'user_left') {
@@ -88,41 +69,18 @@ function handleRemoteEvent(message) {
     return;
   }
   
-  // Only sync if we're on the same URL (normalized comparison)
-  if (url) {
-    const theirURL = normalizeURL(url);
-    const myURL = normalizeURL(window.location.href);
-    
-    console.log(`[Watch Party] 🔗 URL check: MY[${myURL}] vs THEIR[${theirURL}]`);
-    
-    if (theirURL !== myURL) {
-      console.log(`[Watch Party] ❌ Ignoring event - different URL`);
-      return;
-    }
-  }
+  console.log(`[Watch Party] 📥 ${senderUsername} ${type} at ${time.toFixed(2)}s`);
   
-  console.log(`[Watch Party] ✅ ${senderUsername || 'User'} ${type} at ${time.toFixed(2)}s`);
-  
-  // Track this remote action
-  lastRemoteAction = { type, time, timestamp: Date.now() };
-  ignoringEvents = true;
-
-  // Calculate time difference to sync precisely
-  const timeDiff = Math.abs(videoElement.currentTime - time);
+  // Set flag to prevent echo
+  processingRemoteEvent = true;
   
   switch (type) {
     case 'play':
-      // Always sync time for play
-      if (timeDiff > 0.3) {
-        videoElement.currentTime = time;
-      }
+      videoElement.currentTime = time;
       videoElement.play().catch(err => console.log('[Watch Party] Play error:', err));
       break;
     case 'pause':
-      // Always sync time for pause
-      if (timeDiff > 0.3) {
-        videoElement.currentTime = time;
-      }
+      videoElement.currentTime = time;
       videoElement.pause();
       break;
     case 'seek':
@@ -130,51 +88,21 @@ function handleRemoteEvent(message) {
       break;
   }
 
-  // Reset flag after video has time to process
+  // Reset flag quickly
   setTimeout(() => {
-    ignoringEvents = false;
-  }, IGNORE_DURATION);
+    processingRemoteEvent = false;
+  }, 100);
 }
 
-// Send event to server with throttling
+// Send event to server
 function sendEvent(type, time) {
-  console.log(`[Watch Party] 🎬 Video ${type} event detected at ${time.toFixed(2)}s`);
-  
-  if (!isConnected) {
-    console.log(`[Watch Party] ❌ Not connected, can't send ${type}`);
-    return;
-  }
-  if (!sessionId) {
-    console.log(`[Watch Party] ❌ No sessionId, can't send ${type}`);
-    return;
-  }
-  if (!username) {
-    console.log(`[Watch Party] ❌ No username, can't send ${type}`);
+  // Don't send if we're processing a remote event (prevent immediate echo)
+  if (processingRemoteEvent) {
+    console.log(`[Watch Party] 🚫 Skipping ${type} (processing remote)`);
     return;
   }
 
-  // Don't send if we're still processing a remote event
-  if (ignoringEvents) {
-    console.log(`[Watch Party] 🚫 Ignoring own ${type} event (processing remote)`);
-    return;
-  }
-
-  // Don't send if this looks like an event we just caused from remote action
-  const timeSinceRemote = Date.now() - lastRemoteAction.timestamp;
-  if (timeSinceRemote < IGNORE_DURATION) {
-    const timeDiff = Math.abs(time - lastRemoteAction.time);
-    if (timeDiff < 1.0) {
-      console.log(`[Watch Party] 🚫 Ignoring own ${type} event (matches remote action ${lastRemoteAction.type})`);
-      return;
-    }
-  }
-
-  const now = Date.now();
-  if (now - lastEventTime < EVENT_THROTTLE_MS && type !== 'pause' && type !== 'play') {
-    console.log(`[Watch Party] ⏱️ Throttled ${type} event`);
-    return;
-  }
-  lastEventTime = now;
+  if (!isConnected || !sessionId || !username) return;
 
   const payload = {
     type,
@@ -185,7 +113,7 @@ function sendEvent(type, time) {
   };
 
   ws.send(JSON.stringify(payload));
-  console.log(`[Watch Party] 📤 SENT ${type} event at ${time.toFixed(2)}s`);
+  console.log(`[Watch Party] 📤 SENT ${type} at ${time.toFixed(2)}s`);
 }
 
 // Hook into video element
